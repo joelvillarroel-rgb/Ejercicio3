@@ -1,37 +1,41 @@
 import streamlit as st
 import math
+import numpy as np
+import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Diseño de Capacidad M/M/1", layout="centered")
 
-st.title("📊 Diseño Inverso de Capacidad - Modelo M/M/1")
-
+# -----------------------------
+# TÍTULO
+# -----------------------------
+st.title("📊 Diseño de Capacidad en Sistemas M/M/1")
 st.markdown("""
-Esta aplicación calcula la **tasa mínima de servicio (μ)** necesaria 
-para cumplir un nivel de servicio en una cola M/M/1.
+Herramienta para determinar la **tasa mínima de servicio (μ)** requerida
+para cumplir un nivel de servicio en sistemas de colas.
 """)
 
-# Entradas
-st.sidebar.header("Parámetros de entrada")
+# -----------------------------
+# ENTRADAS
+# -----------------------------
+st.sidebar.header("⚙️ Parámetros de entrada")
 
 lambda_rate = st.sidebar.number_input(
-    "Tasa de llegada λ (clientes/hora)", 
-    min_value=0.1, 
+    "Tasa de llegada λ (clientes/hora)",
+    min_value=0.1,
     value=30.0
 )
 
 Wq_max_min = st.sidebar.number_input(
-    "Tiempo máximo en cola (minutos)", 
-    min_value=0.1, 
+    "Tiempo máximo en cola (minutos)",
+    min_value=0.1,
     value=2.0
 )
 
-# Conversión a horas
-Wq_max = Wq_max_min / 60
+Wq_max = Wq_max_min / 60  # a horas
 
-# Cálculo de μ mínima
-# Resolviendo: λ / (μ(μ - λ)) ≤ Wq_max
-# Forma cuadrática: μ² - λμ - λ/Wq_max ≥ 0
-
+# -----------------------------
+# CÁLCULO PRINCIPAL
+# -----------------------------
 a = 1
 b = -lambda_rate
 c = -lambda_rate / Wq_max
@@ -39,52 +43,89 @@ c = -lambda_rate / Wq_max
 discriminant = b**2 - 4*a*c
 
 if discriminant > 0:
+
     mu_min = (-b + math.sqrt(discriminant)) / (2*a)
     mu_practico = math.ceil(mu_min)
 
-    # Métricas con μ práctico
+    # Métricas
     rho = lambda_rate / mu_practico
     Lq = (lambda_rate**2) / (mu_practico * (mu_practico - lambda_rate))
     L = lambda_rate / (mu_practico - lambda_rate)
     Wq = Lq / lambda_rate
     W = L / lambda_rate
 
-    # Mostrar resultados
-    st.subheader("📌 Resultados")
+    # -----------------------------
+    # RESULTADOS
+    # -----------------------------
+    st.subheader("📌 Resultados principales")
 
-    st.write(f"**μ mínimo teórico:** {mu_min:.2f} clientes/hora")
-    st.write(f"**μ recomendado (práctico):** {mu_practico} clientes/hora")
+    col1, col2 = st.columns(2)
+
+    col1.metric("μ mínimo teórico", f"{mu_min:.2f}")
+    col2.metric("μ recomendado", f"{mu_practico}")
 
     st.subheader("📊 Indicadores del sistema")
 
-    st.write(f"**Utilización (ρ):** {rho:.4f}")
-    st.write(f"**Clientes en cola (Lq):** {Lq:.4f}")
-    st.write(f"**Clientes en sistema (L):** {L:.4f}")
-    st.write(f"**Tiempo en cola (Wq):** {Wq*60:.2f} minutos")
-    st.write(f"**Tiempo total (W):** {W*60:.2f} minutos")
+    col1, col2 = st.columns(2)
 
-    # Validación
-    st.subheader("✅ Validación del nivel de servicio")
+    col1.metric("Utilización (ρ)", f"{rho:.4f}")
+    col1.metric("Clientes en cola (Lq)", f"{Lq:.4f}")
+    col1.metric("Tiempo en cola (Wq)", f"{Wq*60:.2f} min")
+
+    col2.metric("Clientes en sistema (L)", f"{L:.4f}")
+    col2.metric("Tiempo total (W)", f"{W*60:.2f} min")
+
+    # -----------------------------
+    # VALIDACIÓN
+    # -----------------------------
+    st.subheader("✅ Validación")
 
     if Wq <= Wq_max:
-        st.success("El sistema cumple el tiempo máximo de espera.")
+        st.success("El sistema cumple el nivel de servicio.")
     else:
         st.error("El sistema NO cumple el nivel de servicio.")
 
-    # Interpretación
-    st.subheader("🧠 Interpretación")
+    # -----------------------------
+    # GRÁFICO DE SENSIBILIDAD
+    # -----------------------------
+    st.subheader("📈 Análisis de sensibilidad: μ vs Wq")
+
+    mu_values = np.linspace(lambda_rate + 1, lambda_rate * 2, 100)
+    Wq_values = lambda_rate / (mu_values * (mu_values - lambda_rate))
+
+    fig, ax = plt.subplots()
+    ax.plot(mu_values, Wq_values * 60)  # en minutos
+    ax.axhline(Wq_max_min, linestyle='--')
+    ax.axvline(mu_practico, linestyle='--')
+
+    ax.set_xlabel("μ (clientes/hora)")
+    ax.set_ylabel("Wq (minutos)")
+    ax.set_title("Sensibilidad del tiempo de espera")
+
+    st.pyplot(fig)
+
+    # -----------------------------
+    # INTERPRETACIÓN
+    # -----------------------------
+    st.subheader("🧠 Interpretación gerencial")
 
     st.markdown(f"""
-    - El sistema necesita una capacidad de al menos **{mu_practico} clientes/hora**.
-    - La utilización es del **{rho*100:.2f}%**, lo cual indica un sistema saludable.
-    - El tiempo de espera es **{Wq*60:.2f} minutos**, cumpliendo la restricción.
+    - Para cumplir un tiempo máximo de espera de **{Wq_max_min} minutos**, 
+      se requiere una capacidad mínima de **{mu_practico} clientes/hora**.
     
-    📌 **Conclusión gerencial:**
+    - La utilización del sistema es **{rho*100:.2f}%**, lo que indica:
+        - Sistema eficiente
+        - Sin sobrecarga crítica
     
-    Para garantizar un servicio de alta calidad, la empresa debe operar con 
-    suficiente margen entre λ y μ. Diseñar con poca holgura generaría 
-    congestión y mala experiencia del cliente.
+    - El gráfico muestra que:
+        - Pequeñas variaciones en μ cerca de λ generan grandes cambios en Wq
+        - Se requiere margen de capacidad (holgura operativa)
+    
+    📌 **Conclusión:**
+    
+    Diseñar con μ cercano a λ es un error. Para cumplir estándares exigentes,
+    se necesita capacidad suficiente para absorber variabilidad y evitar congestión.
     """)
 
 else:
-    st.error("No se pudo calcular la solución. Verifique los datos.")
+    st.error("Error en los cálculos. Verifique los parámetros.")
